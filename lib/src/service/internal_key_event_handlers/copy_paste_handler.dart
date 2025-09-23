@@ -295,6 +295,7 @@ void _pasteMultipleLinesInText(
 }
 
 void handlePaste(EditorState editorState) async {
+  print("HANDLING PASTE!");
   final data = await AppFlowyClipboard.getData();
 
   if (editorState.selection?.isCollapsed ?? false) {

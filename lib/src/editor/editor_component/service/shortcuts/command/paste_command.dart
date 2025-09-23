@@ -1,5 +1,6 @@
 import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:flutter/material.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 final List<CommandShortcutEvent> pasteCommands = [
   pasteCommand,
@@ -49,7 +50,25 @@ CommandShortcutEventHandler _pasteTextWithoutFormattingCommandHandler =
 
 CommandShortcutEventHandler _pasteCommandHandler = (editorState) {
   final selection = editorState.selection;
-  if (selection == null) {
+
+  // When reading from clipboard on web, it should be done via events
+  // there isn't a super great way to do this currently, as reading
+  // from clipboard will ask for browser permission (if available),
+  // and it will absorb the event once retrieved.
+  //
+  // super_clipboard has a workaround, which is to the browser-provided
+  // paste listener event stream. This is much better, but still has the
+  // limitation of absorbing the events when gaining a handle on the
+  // `reader` object. Because Flutter doesn't abstract over the clipboard,
+  // any time this is read, there is no way to re-broadcast this value
+  // natively.
+  //
+  // What this does is requires you to implement this in the requiring
+  // package. While not ideal, it's the only current way to allow for
+  // paste handling while also allowing for custom paste handlers. We
+  // need to be careful about we absorb these events since it means
+  // any parts of the importing package simple cannot use it elsewhere.
+  if (selection == null || UniversalPlatform.isWeb) {
     return KeyEventResult.ignored;
   }
 
