@@ -7,9 +7,11 @@ final ToolbarItem numberedListItem = ToolbarItem(
   group: 3,
   isActive: onlyShowInTextType,
   builder: (context, editorState, highlightColor, iconColor, tooltipBuilder) {
-    final selection = editorState.selection!;
-    final node = editorState.getNodeAtPath(selection.start.path)!;
-    final isHighlight = node.type == 'numbered_list';
+    final selection = editorState.selection;
+    final node = selection != null
+        ? editorState.getNodeAtPath(selection.start.path)!
+        : null;
+    final isHighlight = node?.type == 'numbered_list';
     final child = SVGIconItemWidget(
       iconName: 'toolbar/numbered_list',
       isHighlight: isHighlight,

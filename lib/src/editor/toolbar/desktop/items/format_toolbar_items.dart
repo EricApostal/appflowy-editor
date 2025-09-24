@@ -39,18 +39,22 @@ class _FormatToolbarItem extends ToolbarItem {
             iconColor,
             tooltipBuilder,
           ) {
-            final selection = editorState.selection!;
-            final nodes = editorState.getNodesInSelection(selection);
-            final isHighlight = nodes.allSatisfyInSelection(
-              selection,
-              (delta) =>
-                  delta.isNotEmpty &&
-                  delta.everyAttributes((attr) => attr[name] == true),
-            );
+            final selection = editorState.selection;
+            final nodes = selection != null
+                ? editorState.getNodesInSelection(selection)
+                : null;
+            final isHighlight = selection != null
+                ? nodes?.allSatisfyInSelection(
+                    selection,
+                    (delta) =>
+                        delta.isNotEmpty &&
+                        delta.everyAttributes((attr) => attr[name] == true),
+                  )
+                : null;
 
             final child = SVGIconItemWidget(
               iconName: 'toolbar/$name',
-              isHighlight: isHighlight,
+              isHighlight: isHighlight ?? false,
               highlightColor: highlightColor,
               iconColor: iconColor,
               onPressed: () => editorState.toggleAttribute(name),

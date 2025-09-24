@@ -7,10 +7,12 @@ final ToolbarItem paragraphItem = ToolbarItem(
   group: 1,
   isActive: onlyShowInSingleSelectionAndTextType,
   builder: (context, editorState, highlightColor, iconColor, tooltipBuilder) {
-    final selection = editorState.selection!;
-    final node = editorState.getNodeAtPath(selection.start.path)!;
-    final isHighlight = node.type == 'paragraph';
-    final delta = (node.delta ?? Delta()).toJson();
+    final selection = editorState.selection;
+    final node = selection != null
+        ? editorState.getNodeAtPath(selection.start.path)
+        : null;
+    final isHighlight = node?.type == 'paragraph';
+    final delta = (node?.delta ?? Delta()).toJson();
     final child = SVGIconItemWidget(
       iconName: 'toolbar/text',
       isHighlight: isHighlight,

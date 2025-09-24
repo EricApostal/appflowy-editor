@@ -13,20 +13,24 @@ final linkItem = ToolbarItem(
   group: 4,
   isActive: onlyShowInSingleSelectionAndTextType,
   builder: (context, editorState, highlightColor, iconColor, tooltipBuilder) {
-    final selection = editorState.selection!;
-    final nodes = editorState.getNodesInSelection(selection);
-    final isHref = nodes.allSatisfyInSelection(selection, (delta) {
-      return delta.everyAttributes(
-        (attributes) => attributes[AppFlowyRichTextKeys.href] != null,
-      );
-    });
+    final selection = editorState.selection;
+    final nodes =
+        selection != null ? editorState.getNodesInSelection(selection) : null;
+    final isHref = selection != null
+        ? nodes?.allSatisfyInSelection(selection, (delta) {
+            return delta.everyAttributes(
+              (attributes) => attributes[AppFlowyRichTextKeys.href] != null,
+            );
+          })
+        : null;
 
     final child = SVGIconItemWidget(
       iconName: 'toolbar/link',
-      isHighlight: isHref,
+      isHighlight: isHref ?? false,
       highlightColor: highlightColor,
       iconColor: iconColor,
       onPressed: () {
+        if (selection == null || isHref == null) return;
         showLinkMenu(context, editorState, selection, isHref);
       },
     );
