@@ -354,20 +354,34 @@ SelectionMenuItem tableMenuItem = SelectionMenuItem(
     final transaction = editorState.transaction;
     final delta = currentNode.delta;
     if (delta != null && delta.isEmpty) {
-      transaction
-        ..insertNode(selection.end.path, tableNode.node)
-        ..deleteNode(currentNode);
+      // crappy way to solve not being able to type before / after tables
+      // def a better way to solve this
+      final basePath = selection.end.path;
+
+      transaction.deleteNode(currentNode);
+
+      final hasPrevious = basePath.last > 0;
+      if (!hasPrevious) {
+        transaction.insertNode(basePath, paragraphNode());
+      }
+
+      final tablePath = !hasPrevious ? basePath.next : basePath;
+      transaction.insertNode(tablePath, tableNode.node);
+
+      transaction.insertNode(tablePath.next, paragraphNode());
+
       transaction.afterSelection = Selection.collapsed(
         Position(
-          path: selection.end.path + [0, 0],
+          path: tablePath + [0, 0],
           offset: 0,
         ),
       );
     } else {
-      transaction.insertNode(selection.end.path.next, tableNode.node);
+      final tablePath = selection.end.path.next;
+      transaction.insertNode(tablePath, tableNode.node);
       transaction.afterSelection = Selection.collapsed(
         Position(
-          path: selection.end.path.next + [0, 0],
+          path: tablePath + [0, 0],
           offset: 0,
         ),
       );
