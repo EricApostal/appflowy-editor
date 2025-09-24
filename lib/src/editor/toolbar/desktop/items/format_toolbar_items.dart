@@ -18,10 +18,10 @@ final List<ToolbarItem> markdownFormatItems = [
     id: 'strikethrough',
     name: 'strikethrough',
   ),
-  _FormatToolbarItem(
-    id: 'code',
-    name: 'code',
-  ),
+  // _FormatToolbarItem(
+  //   id: 'code',
+  //   name: 'code',
+  // ),
 ];
 
 class _FormatToolbarItem extends ToolbarItem {
