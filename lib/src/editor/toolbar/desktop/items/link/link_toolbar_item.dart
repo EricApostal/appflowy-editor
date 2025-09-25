@@ -12,37 +12,100 @@ final linkItem = ToolbarItem(
   id: _kLinkItemId,
   group: 4,
   isActive: (editorState) {
-    // Only show link item when there's actual text selected (non-collapsed selection)
     final selection = editorState.selection;
-    if (selection == null || !selection.isSingle || selection.isCollapsed) {
+    if (selection == null || !selection.isSingle) {
       return false;
     }
+
     final node = editorState.getNodeAtPath(selection.start.path);
-    if (node == null) {
+    if (node == null ||
+        node.delta == null ||
+        !toolbarItemWhiteList.contains(node.type)) {
       return false;
     }
-    return node.delta != null && toolbarItemWhiteList.contains(node.type);
+
+    // If text is selected, show the link button
+    if (!selection.isCollapsed) {
+      return true;
+    }
+
+    // If cursor is positioned within an existing link, show the link button
+    final attributes = editorState.getDeltaAttributesInSelectionStart();
+    if (attributes != null && attributes[AppFlowyRichTextKeys.href] != null) {
+      return true;
+    }
+
+    return false;
   },
   builder: (context, editorState, highlightColor, iconColor, tooltipBuilder) {
     final selection = editorState.selection;
-    final nodes =
-        selection != null ? editorState.getNodesInSelection(selection) : null;
-    final isHref = selection != null
-        ? nodes?.allSatisfyInSelection(selection, (delta) {
-            return delta.everyAttributes(
-              (attributes) => attributes[AppFlowyRichTextKeys.href] != null,
-            );
-          })
-        : null;
+    if (selection == null) {
+      return const SizedBox.shrink();
+    }
+
+    // Expand collapsed selection to include the entire link if cursor is within a link
+    Selection workingSelection = selection;
+    bool isHref = false;
+
+    if (selection.isCollapsed) {
+      // Check if cursor is within a link
+      final attributes = editorState.getDeltaAttributesInSelectionStart();
+      if (attributes != null && attributes[AppFlowyRichTextKeys.href] != null) {
+        // Find the bounds of the link text
+        final node = editorState.getNodeAtPath(selection.start.path);
+        if (node?.delta != null) {
+          final delta = node!.delta!;
+          final offset = selection.start.offset;
+
+          // Find start of link
+          int linkStart = offset;
+          while (linkStart > 0) {
+            final prevAttrs =
+                delta.slice(linkStart - 1, linkStart).firstOrNull?.attributes;
+            if (prevAttrs?[AppFlowyRichTextKeys.href] !=
+                attributes[AppFlowyRichTextKeys.href]) {
+              break;
+            }
+            linkStart--;
+          }
+
+          // Find end of link
+          int linkEnd = offset;
+          while (linkEnd < delta.length) {
+            final nextAttrs =
+                delta.slice(linkEnd, linkEnd + 1).firstOrNull?.attributes;
+            if (nextAttrs?[AppFlowyRichTextKeys.href] !=
+                attributes[AppFlowyRichTextKeys.href]) {
+              break;
+            }
+            linkEnd++;
+          }
+
+          // Create expanded selection
+          workingSelection = Selection(
+            start: Position(path: selection.start.path, offset: linkStart),
+            end: Position(path: selection.end.path, offset: linkEnd),
+          );
+          isHref = true;
+        }
+      }
+    } else {
+      // Non-collapsed selection, check if it's a link
+      final nodes = editorState.getNodesInSelection(workingSelection);
+      isHref = nodes.allSatisfyInSelection(workingSelection, (delta) {
+        return delta.everyAttributes(
+          (attributes) => attributes[AppFlowyRichTextKeys.href] != null,
+        );
+      });
+    }
 
     final child = SVGIconItemWidget(
       iconName: 'toolbar/link',
-      isHighlight: isHref ?? false,
+      isHighlight: isHref,
       highlightColor: highlightColor,
       iconColor: iconColor,
       onPressed: () {
-        if (selection == null || isHref == null) return;
-        showLinkMenu(context, editorState, selection, isHref);
+        showLinkMenu(context, editorState, workingSelection, isHref);
       },
     );
 
