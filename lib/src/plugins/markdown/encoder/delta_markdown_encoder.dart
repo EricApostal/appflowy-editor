@@ -15,9 +15,20 @@ class DeltaMarkdownEncoder extends Converter<Delta, String> {
       if (op is TextInsert) {
         final attributes = op.attributes;
         if (attributes != null) {
-          buffer.write(_prefixSyntax(attributes));
-          buffer.write(op.text);
-          buffer.write(_suffixSyntax(attributes));
+          // trailing space fix
+          final text = op.text;
+          final trimmedText = text.trimRight();
+          final trailingSpaces = text.substring(trimmedText.length);
+
+          if (trimmedText.isNotEmpty) {
+            buffer.write(_prefixSyntax(attributes));
+            buffer.write(trimmedText);
+            buffer.write(_suffixSyntax(attributes));
+          }
+
+          if (trailingSpaces.isNotEmpty) {
+            buffer.write(trailingSpaces);
+          }
         } else {
           buffer.write(op.text);
         }
