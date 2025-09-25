@@ -11,7 +11,18 @@ const _kLinkItemId = 'editor.link';
 final linkItem = ToolbarItem(
   id: _kLinkItemId,
   group: 4,
-  isActive: onlyShowInSingleSelectionAndTextType,
+  isActive: (editorState) {
+    // Only show link item when there's actual text selected (non-collapsed selection)
+    final selection = editorState.selection;
+    if (selection == null || !selection.isSingle || selection.isCollapsed) {
+      return false;
+    }
+    final node = editorState.getNodeAtPath(selection.start.path);
+    if (node == null) {
+      return false;
+    }
+    return node.delta != null && toolbarItemWhiteList.contains(node.type);
+  },
   builder: (context, editorState, highlightColor, iconColor, tooltipBuilder) {
     final selection = editorState.selection;
     final nodes =
