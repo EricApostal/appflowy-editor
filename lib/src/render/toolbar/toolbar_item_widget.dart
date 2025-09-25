@@ -18,8 +18,8 @@ class ToolbarItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     if (item.iconBuilder != null) {
       return SizedBox(
-        width: 28,
-        height: 28,
+        width: 40,
+        height: 40,
         child: Tooltip(
           textAlign: TextAlign.center,
           preferBelow: false,
@@ -31,7 +31,7 @@ class ToolbarItemWidget extends StatelessWidget {
               highlightColor: Colors.transparent,
               padding: EdgeInsets.zero,
               icon: item.iconBuilder!(isHighlight),
-              iconSize: 28,
+              iconSize: 40,
               onPressed: onPressed,
             ),
           ),

@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 class SVGIconItemWidget extends StatelessWidget {
   const SVGIconItemWidget({
     super.key,
-    this.size = const Size.square(30.0),
-    this.iconSize = const Size.square(18.0),
+    this.size = const Size.square(40.0),
+    this.iconSize = const Size.square(24.0),
     this.iconName,
     this.iconBuilder,
     required this.isHighlight,
