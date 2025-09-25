@@ -2,10 +2,10 @@ import 'package:appflowy_editor/appflowy_editor.dart';
 import 'package:appflowy_editor/src/editor/toolbar/desktop/items/utils/tooltip_util.dart';
 
 final List<ToolbarItem> markdownFormatItems = [
-  _FormatToolbarItem(
-    id: 'underline',
-    name: 'underline',
-  ),
+  // _FormatToolbarItem(
+  //   id: 'underline',
+  //   name: 'underline',
+  // ),
   _FormatToolbarItem(
     id: 'bold',
     name: 'bold',
