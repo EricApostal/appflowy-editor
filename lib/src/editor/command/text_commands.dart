@@ -180,6 +180,76 @@ extension TextTransforms on EditorState {
     );
   }
 
+  /// (Courtesy of Claude Sonnet 4) Helper function to trim spaces from the start and end of a selection
+  Selection _trimSpacesFromSelection(Selection selection) {
+    if (selection.isCollapsed) {
+      return selection;
+    }
+
+    final normalizedSelection = selection.normalized;
+
+    if (normalizedSelection.start.path.toString() !=
+        normalizedSelection.end.path.toString()) {
+      return normalizedSelection;
+    }
+
+    final node = getNodeAtPath(normalizedSelection.start.path);
+    final delta = node?.delta;
+    if (delta == null) {
+      return normalizedSelection;
+    }
+
+    final text = delta.toPlainText();
+    final startOffset = normalizedSelection.start.offset;
+    final endOffset = normalizedSelection.end.offset;
+
+    if (startOffset < 0 ||
+        endOffset > text.length ||
+        startOffset >= endOffset) {
+      return normalizedSelection;
+    }
+
+    final selectedText = text.substring(startOffset, endOffset);
+    int leadingSpaces = 0;
+    for (int i = 0; i < selectedText.length; i++) {
+      if (selectedText[i] != ' ' &&
+          selectedText[i] != '\t' &&
+          selectedText[i] != '\n') {
+        break;
+      }
+      leadingSpaces++;
+    }
+
+    int trailingSpaces = 0;
+    for (int i = selectedText.length - 1; i >= 0; i--) {
+      if (selectedText[i] != ' ' &&
+          selectedText[i] != '\t' &&
+          selectedText[i] != '\n') {
+        break;
+      }
+      trailingSpaces++;
+    }
+
+    if (leadingSpaces + trailingSpaces >= selectedText.length) {
+      return Selection.collapsed(
+          Position(path: normalizedSelection.start.path, offset: startOffset));
+    }
+
+    final newStartOffset = startOffset + leadingSpaces;
+    final newEndOffset = endOffset - trailingSpaces;
+
+    if (newStartOffset >= newEndOffset) {
+      return Selection.collapsed(
+          Position(path: normalizedSelection.start.path, offset: startOffset));
+    }
+
+    return Selection(
+      start: Position(
+          path: normalizedSelection.start.path, offset: newStartOffset),
+      end: Position(path: normalizedSelection.end.path, offset: newEndOffset),
+    );
+  }
+
   /// Toggles the given attribute on or off for the selected text.
   ///
   /// If the [Selection] is not passed in, use the current selection.
@@ -215,13 +285,17 @@ extension TextTransforms on EditorState {
         updateToggledStyle(key, !toggled);
       }
     } else {
-      final isHighlight = nodes.allSatisfyInSelection(selection, (delta) {
+      final trimmedSelection = _trimSpacesFromSelection(selection);
+      final trimmedNodes = getNodesInSelection(trimmedSelection);
+
+      final isHighlight =
+          trimmedNodes.allSatisfyInSelection(trimmedSelection, (delta) {
         return delta.everyAttributes(
           (attributes) => attributes[key] == true,
         );
       });
       await formatDelta(
-        selection,
+        trimmedSelection,
         {
           key: !isHighlight,
         },
