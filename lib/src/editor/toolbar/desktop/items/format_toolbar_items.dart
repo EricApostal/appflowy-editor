@@ -14,10 +14,10 @@ final List<ToolbarItem> markdownFormatItems = [
     id: 'italic',
     name: 'italic',
   ),
-  _FormatToolbarItem(
-    id: 'strikethrough',
-    name: 'strikethrough',
-  ),
+  // _FormatToolbarItem(
+  //   id: 'strikethrough',
+  //   name: 'strikethrough',
+  // ),
   // _FormatToolbarItem(
   //   id: 'code',
   //   name: 'code',
