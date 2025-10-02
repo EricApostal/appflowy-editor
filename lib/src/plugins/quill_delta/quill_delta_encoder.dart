@@ -16,55 +16,93 @@ const _blockquote = 'blockquote';
 const _indent = 'indent';
 
 class QuillDeltaEncoder extends Converter<Delta, Document> {
-  final Map<int, List<Node>> nestedLists = {};
-
   @override
   Document convert(Delta input) {
-    final iterator = input.iterator;
     final document = Document.blank(withInitialText: false);
+    if (input.isEmpty) {
+      document.insert([0], [paragraphNode()]);
+      return document;
+    }
 
-    Node node = paragraphNode();
-    int index = 0;
+    var currentNode = paragraphNode();
+    var topLevelIndex = 0;
 
-    while (iterator.moveNext()) {
-      final op = iterator.current;
-      final attributes = op.attributes;
-      if (op is TextInsert) {
-        if (op.text == _newLineSymbol) {
-          if (attributes != null) {
-            node = _applyListStyleIfNeeded(node, attributes);
-            node = _applyHeadingStyleIfNeeded(node, attributes);
-            node = _applyBlockquoteIfNeeded(node, attributes);
-            _applyIndentIfNeeded(node, attributes);
-          }
-          if (_isIndentBulletedList(attributes)) {
-            final level = _indentLevel(attributes);
-            final path = [
-              ...nestedLists[level - 1]!.last.path,
-              nestedLists[level]!.length - 1,
-            ];
-            document.insert(path, [node]);
-          } else {
-            document.insert([index++], [node]);
-          }
-          node = paragraphNode();
-        } else {
-          final texts = op.text.split('\n');
-          if (texts.length > 1) {
-            node.delta?.insert(texts[0]);
-            document.insert([index++], [node]);
-            node = paragraphNode(delta: Delta()..insert(texts[1]));
-          } else {
-            _applyStyle(node, op.text, attributes);
-          }
+    // Stores the full path to the last node inserted at a given indent level.
+    // This is the key to correctly reconstructing nested structures.
+    final Map<int, List<int>> lastPathAtLevel = {};
+
+    for (final op in input) {
+      if (op is! TextInsert) {
+        continue;
+      }
+
+      final lines = op.text.split(_newLineSymbol);
+
+      for (int i = 0; i < lines.length; i++) {
+        final lineText = lines[i];
+
+        if (lineText.isNotEmpty) {
+          _applyStyle(currentNode, lineText, op.attributes);
         }
-      } else {
-        throw UnsupportedError('only support text insert operation');
+
+        // A newline character signifies the end of a block.
+        if (i < lines.length - 1) {
+          final attributes = op.attributes;
+          int indentLevel = attributes?[_indent] as int? ?? 0;
+
+          // Apply block styles (e.g., convert from paragraph to list item).
+          if (attributes != null) {
+            currentNode = _applyListStyleIfNeeded(currentNode, attributes);
+            currentNode = _applyHeadingStyleIfNeeded(currentNode, attributes);
+            currentNode = _applyBlockquoteIfNeeded(currentNode, attributes);
+            _applyIndentIfNeeded(currentNode, attributes);
+          }
+
+          // Determine the correct insertion path for the node.
+          List<int> insertionPath;
+          if (indentLevel == 0) {
+            insertionPath = [topLevelIndex];
+            topLevelIndex++;
+          } else {
+            // Get the path of the parent (the last node at the level above).
+            List<int>? parentPath = lastPathAtLevel[indentLevel - 1];
+            if (parentPath == null) {
+              // This is an "orphaned" indented item. Fallback to inserting at the top level.
+              insertionPath = [topLevelIndex];
+              topLevelIndex++;
+            } else {
+              // Get the parent node from the document to find its number of children.
+              // This gives us the correct index for the new child node.
+              final parentNode = document.nodeAtPath(parentPath);
+              final childIndex = parentNode?.children.length ?? 0;
+              insertionPath = [...parentPath, childIndex];
+            }
+          }
+
+          document.insert(insertionPath, [currentNode]);
+
+          // Store the path of the node we just inserted for subsequent children.
+          lastPathAtLevel[indentLevel] = insertionPath;
+          // Invalidate paths for any deeper levels, as they are no longer relevant.
+          lastPathAtLevel.keys
+              .where((k) => k > indentLevel)
+              .toList()
+              .forEach(lastPathAtLevel.remove);
+
+          // Reset for the next block.
+          currentNode = paragraphNode();
+        }
       }
     }
 
-    if (index == 0) {
-      document.insert([index], [node]);
+    // Add the very last node if it has content (for deltas that don't end with a newline).
+    if (currentNode.delta?.isNotEmpty == true) {
+      document.insert([topLevelIndex], [currentNode]);
+    }
+
+    // Ensure the document is never completely empty.
+    if (document.root.children.isEmpty) {
+      document.insert([0], [paragraphNode()]);
     }
 
     return document;
@@ -98,9 +136,8 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     if (backgroundHex != null) {
       attrs[AppFlowyRichTextKeys.backgroundColor] = backgroundHex;
     }
-    node.updateAttributes({
-      'delta': (node.delta?..insert(text, attributes: attrs))?.toJson(),
-    });
+    final newDelta = (node.delta ?? Delta())..insert(text, attributes: attrs);
+    node.updateAttributes({'delta': newDelta.toJson()});
   }
 
   void _applyIndentIfNeeded(Node node, Map<String, dynamic> attributes) {
@@ -140,50 +177,28 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     );
   }
 
-  // If the attributes contains the list style, then apply the list style to the node.
+  // This helper now just transforms the node type without any side effects.
   Node _applyListStyleIfNeeded(Node node, Map<String, dynamic> attributes) {
     final list = attributes[_list] as String?;
     switch (list) {
       case _bulletedList:
-        final bulletedList = bulletedListNode(
+        return bulletedListNode(
           delta: node.delta,
         );
-        final indent = attributes[_indent] as int?;
-        if (indent != null) {
-          nestedLists[indent] ??= [];
-          nestedLists[indent]?.add(bulletedList);
-        } else {
-          nestedLists.clear();
-          nestedLists[0] ??= [];
-          nestedLists[0]?.add(bulletedList);
-        }
-        return bulletedList;
       case _orderedList:
-        final numberedList = numberedListNode(
+        return numberedListNode(
           delta: node.delta,
         );
-        final indent = attributes[_indent] as int?;
-        if (indent != null) {
-          nestedLists[indent] ??= [];
-          nestedLists[indent]?.add(numberedList);
-        } else {
-          nestedLists.clear();
-          nestedLists[0] ??= [];
-          nestedLists[0]?.add(numberedList);
-        }
-        return numberedList;
       case _checkedList:
-        final checkedList = todoListNode(
+        return todoListNode(
           delta: node.delta,
           checked: true,
         );
-        return checkedList;
       case _uncheckedList:
-        final uncheckedList = todoListNode(
+        return todoListNode(
           delta: node.delta,
           checked: false,
         );
-        return uncheckedList;
       default:
         return node;
     }
