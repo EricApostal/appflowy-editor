@@ -47,7 +47,6 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
 
     // Track the last table cell that was created but not yet populated with content
     Node? pendingTableCell;
-    String? pendingTableId;
     for (final op in processedOps) {
       if (op is! TextInsert) {
         continue;
@@ -69,6 +68,7 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
 
           // Check if this is a table or table cell
           final isTableCell = attributes?[_tableCellKey] == true;
+          print("okay at least here bro");
           final tableId = attributes?[_tableIdKey] as String?;
           final hasTableCols = attributes?.containsKey('table-cols') == true;
           final hasTableRows = attributes?.containsKey('table-rows') == true;
@@ -91,7 +91,6 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
 
             // Set this as the pending table cell to receive the next content
             pendingTableCell = currentNode;
-            pendingTableId = tableId;
 
             // Reset for the next block
             currentNode = paragraphNode();
@@ -127,7 +126,6 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
 
             // Clear the pending state
             pendingTableCell = null;
-            pendingTableId = null;
 
             // Reset currentNode and continue to avoid double insertion
             currentNode = paragraphNode();
