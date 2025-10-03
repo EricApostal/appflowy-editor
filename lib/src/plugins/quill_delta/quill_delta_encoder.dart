@@ -44,10 +44,11 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     final Map<String, Node> tableNodes = {}; // tableId -> tableNode
     final Map<String, List<Node>> tableCells = {}; // tableId -> list of cells
     final Map<String, int> tablePositions = {}; // tableId -> insertion position
-    
+
     // Track the last table cell that was created but not yet populated with content
     Node? pendingTableCell;
-    String? pendingTableId;    for (final op in processedOps) {
+    String? pendingTableId;
+    for (final op in processedOps) {
       if (op is! TextInsert) {
         continue;
       }
@@ -99,7 +100,7 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
             // Handle table node - only if it has table-specific attributes
             final tableNode = _createTableNode(attributes ?? {});
             tableNodes[tableId] = tableNode;
-            
+
             // Record the position where this table should be inserted
             tablePositions[tableId] = topLevelIndex;
             topLevelIndex++; // Reserve this position for the table
@@ -344,7 +345,7 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
         // Sort in reverse order (highest position first)
         return posB.compareTo(posA);
       });
-    
+
     // For each table, add its cells and insert it into the document
     for (final entry in sortedTableEntries) {
       final tableId = entry.key;
@@ -369,7 +370,8 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
       }
 
       // Insert the table into the document at its recorded position
-      final insertionIndex = tablePositions[tableId] ?? document.root.children.length;
+      final insertionIndex =
+          tablePositions[tableId] ?? document.root.children.length;
       document.insert([insertionIndex], [tableNode]);
     }
   }
