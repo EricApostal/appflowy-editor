@@ -32,18 +32,18 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
 
     // Pre-process the delta to group table cell content properly
     final processedOps = input.toList();
-    
+
     var currentNode = paragraphNode();
     var topLevelIndex = 0;
 
     // Stores the full path to the last node inserted at a given indent level.
     // This is the key to correctly reconstructing nested structures.
     final Map<int, List<int>> lastPathAtLevel = {};
-    
+
     // Table reconstruction data
     final Map<String, Node> tableNodes = {}; // tableId -> tableNode
     final Map<String, List<Node>> tableCells = {}; // tableId -> list of cells
-    
+
     // Track the last table cell that was created but not yet populated with content
     Node? pendingTableCell;
     String? pendingTableId;
@@ -81,14 +81,14 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
               currentNode = _applyBlockquoteIfNeeded(currentNode, attributes);
               // Skip indent for table cells as it's not meant for content but structure
             }
-            
+
             // Convert to table cell
             currentNode =
                 _applyTableCellIfNeeded(currentNode, attributes ?? {});
 
             // Store the cell for later table reconstruction
             tableCells.putIfAbsent(tableId, () => []).add(currentNode);
-            
+
             // Set this as the pending table cell to receive the next content
             pendingTableCell = currentNode;
             pendingTableId = tableId;
@@ -107,8 +107,8 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
           }
 
           // Check if we have a pending table cell to populate
-          if (pendingTableCell != null && 
-              currentNode.delta != null && 
+          if (pendingTableCell != null &&
+              currentNode.delta != null &&
               currentNode.delta!.toPlainText().trim().isNotEmpty) {
             // Replace the empty paragraph in the table cell with the content
             if (pendingTableCell.children.isNotEmpty) {
@@ -116,14 +116,15 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
               // Update the existing child with the content
               existingChild.updateAttributes(currentNode.attributes);
               if (currentNode.delta != null) {
-                existingChild.updateAttributes({'delta': currentNode.delta!.toJson()});
+                existingChild
+                    .updateAttributes({'delta': currentNode.delta!.toJson()});
               }
             }
-            
+
             // Clear the pending state
             pendingTableCell = null;
             pendingTableId = null;
-            
+
             // Reset currentNode and continue to avoid double insertion
             currentNode = paragraphNode();
             continue;
@@ -197,7 +198,9 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     }
 
     return document;
-  }  void _applyStyle(Node node, String text, Map<String, dynamic>? attributes) {
+  }
+
+  void _applyStyle(Node node, String text, Map<String, dynamic>? attributes) {
     final Attributes attrs = {};
     if (_containsStyle(attributes, 'strike')) {
       attrs[AppFlowyRichTextKeys.strikethrough] = true;
@@ -323,8 +326,6 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
       children: [], // Children will be added later during reconstruction
     );
   }
-
-
 
   void _reconstructTables(
     Document document,
