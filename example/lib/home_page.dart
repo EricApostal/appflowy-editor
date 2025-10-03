@@ -23,7 +23,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
-import 'package:universal_html/html.dart' as html;
+import 'package:universal_web/web.dart' as web;
 import 'package:universal_platform/universal_platform.dart';
 
 enum ExportFileType {
@@ -392,12 +392,12 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (kIsWeb) {
-      final blob = html.Blob([result], 'text/plain', 'native');
-      html.AnchorElement(
-        href: html.Url.createObjectUrlFromBlob(blob).toString(),
-      )
-        ..setAttribute('download', 'document.${fileType.extension}')
-        ..click();
+      // final blob = html.Blob([result], 'text/plain', 'native');
+      // html.AnchorElement(
+      //   href: html.Url.createObjectUrlFromBlob(blob).toString(),
+      // )
+      //   ..setAttribute('download', 'document.${fileType.extension}')
+      //   ..click();
     } else if (UniversalPlatform.isMobile) {
       final appStorageDirectory = await getApplicationDocumentsDirectory();
 
