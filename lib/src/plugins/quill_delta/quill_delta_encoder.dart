@@ -43,12 +43,11 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     // Table reconstruction data
     final Map<String, Node> tableNodes = {}; // tableId -> tableNode
     final Map<String, List<Node>> tableCells = {}; // tableId -> list of cells
-
+    final Map<String, int> tablePositions = {}; // tableId -> insertion position
+    
     // Track the last table cell that was created but not yet populated with content
     Node? pendingTableCell;
-    String? pendingTableId;
-
-    for (final op in processedOps) {
+    String? pendingTableId;    for (final op in processedOps) {
       if (op is! TextInsert) {
         continue;
       }
@@ -100,6 +99,10 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
             // Handle table node - only if it has table-specific attributes
             final tableNode = _createTableNode(attributes ?? {});
             tableNodes[tableId] = tableNode;
+            
+            // Record the position where this table should be inserted
+            tablePositions[tableId] = topLevelIndex;
+            topLevelIndex++; // Reserve this position for the table
 
             // Reset for the next block
             currentNode = paragraphNode();
@@ -190,7 +193,7 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     }
 
     // Reconstruct tables by adding cells to their parent tables
-    _reconstructTables(document, tableNodes, tableCells);
+    _reconstructTables(document, tableNodes, tableCells, tablePositions);
 
     // Ensure the document is never completely empty.
     if (document.root.children.isEmpty) {
@@ -331,9 +334,19 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     Document document,
     Map<String, Node> tableNodes,
     Map<String, List<Node>> tableCells,
+    Map<String, int> tablePositions,
   ) {
+    // Sort tables by insertion position in reverse order to avoid shifting positions
+    final sortedTableEntries = tableNodes.entries.toList()
+      ..sort((a, b) {
+        final posA = tablePositions[a.key] ?? 0;
+        final posB = tablePositions[b.key] ?? 0;
+        // Sort in reverse order (highest position first)
+        return posB.compareTo(posA);
+      });
+    
     // For each table, add its cells and insert it into the document
-    for (final entry in tableNodes.entries) {
+    for (final entry in sortedTableEntries) {
       final tableId = entry.key;
       final tableNode = entry.value;
       final cells = tableCells[tableId] ?? [];
@@ -355,9 +368,9 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
         tableNode.insert(cell);
       }
 
-      // Insert the table into the document at the end
-      final topLevelIndex = document.root.children.length;
-      document.insert([topLevelIndex], [tableNode]);
+      // Insert the table into the document at its recorded position
+      final insertionIndex = tablePositions[tableId] ?? document.root.children.length;
+      document.insert([insertionIndex], [tableNode]);
     }
   }
 
