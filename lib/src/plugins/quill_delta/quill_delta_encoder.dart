@@ -15,6 +15,12 @@ const _checkedList = 'checked';
 const _blockquote = 'blockquote';
 const _indent = 'indent';
 
+// Table attribute constants
+const _tableCellKey = 'table-cell';
+const _tableRowKey = 'table-row';
+const _tableColKey = 'table-col';
+const _tableIdKey = 'table-id';
+
 class QuillDeltaEncoder extends Converter<Delta, Document> {
   @override
   Document convert(Delta input) {
@@ -30,6 +36,10 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     // Stores the full path to the last node inserted at a given indent level.
     // This is the key to correctly reconstructing nested structures.
     final Map<int, List<int>> lastPathAtLevel = {};
+
+    // Table reconstruction data
+    final Map<String, Node> tableNodes = {}; // tableId -> tableNode
+    final Map<String, List<Node>> tableCells = {}; // tableId -> list of cells
 
     for (final op in input) {
       if (op is! TextInsert) {
@@ -50,6 +60,33 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
           final attributes = op.attributes;
           int indentLevel = attributes?[_indent] as int? ?? 0;
 
+          // Check if this is a table or table cell
+          final isTableCell = attributes?[_tableCellKey] == true;
+          final tableId = attributes?[_tableIdKey] as String?;
+          final hasTableCols = attributes?.containsKey('table-cols') == true;
+          final hasTableRows = attributes?.containsKey('table-rows') == true;
+
+          if (isTableCell && tableId != null) {
+            // Handle table cell
+            currentNode =
+                _applyTableCellIfNeeded(currentNode, attributes ?? {});
+
+            // Store the cell for later table reconstruction
+            tableCells.putIfAbsent(tableId, () => []).add(currentNode);
+
+            // Reset for the next block
+            currentNode = paragraphNode();
+            continue;
+          } else if (tableId != null && (hasTableCols || hasTableRows)) {
+            // Handle table node - only if it has table-specific attributes
+            final tableNode = _createTableNode(attributes ?? {});
+            tableNodes[tableId] = tableNode;
+
+            // Reset for the next block
+            currentNode = paragraphNode();
+            continue;
+          }
+
           // Apply block styles (e.g., convert from paragraph to list item).
           if (attributes != null) {
             currentNode = _applyListStyleIfNeeded(currentNode, attributes);
@@ -59,11 +96,17 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
           }
 
           // Determine the correct insertion path for the node.
+          // Only create nested structures for lists, not for simple indented paragraphs
+          final list = attributes?[_list] as String?;
+          final isListItem = list != null;
+
           List<int> insertionPath;
-          if (indentLevel == 0) {
+          if (indentLevel == 0 || !isListItem) {
+            // Insert at top level for non-indented items or indented paragraphs (not lists)
             insertionPath = [topLevelIndex];
             topLevelIndex++;
           } else {
+            // Only create nested structure for list items
             // Get the path of the parent (the last node at the level above).
             List<int>? parentPath = lastPathAtLevel[indentLevel - 1];
             if (parentPath == null) {
@@ -82,12 +125,15 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
           document.insert(insertionPath, [currentNode]);
 
           // Store the path of the node we just inserted for subsequent children.
-          lastPathAtLevel[indentLevel] = insertionPath;
-          // Invalidate paths for any deeper levels, as they are no longer relevant.
-          lastPathAtLevel.keys
-              .where((k) => k > indentLevel)
-              .toList()
-              .forEach(lastPathAtLevel.remove);
+          // Only track paths for list items that can have nested children
+          if (isListItem) {
+            lastPathAtLevel[indentLevel] = insertionPath;
+            // Invalidate paths for any deeper levels, as they are no longer relevant.
+            lastPathAtLevel.keys
+                .where((k) => k > indentLevel)
+                .toList()
+                .forEach(lastPathAtLevel.remove);
+          }
 
           // Reset for the next block.
           currentNode = paragraphNode();
@@ -99,6 +145,9 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     if (currentNode.delta?.isNotEmpty == true) {
       document.insert([topLevelIndex], [currentNode]);
     }
+
+    // Reconstruct tables by adding cells to their parent tables
+    _reconstructTables(document, tableNodes, tableCells);
 
     // Ensure the document is never completely empty.
     if (document.root.children.isEmpty) {
@@ -204,15 +253,69 @@ class QuillDeltaEncoder extends Converter<Delta, Document> {
     }
   }
 
-  int _indentLevel(Map? attributes) {
-    final indent = attributes?['indent'] as int?;
-    return indent ?? 1;
+  Node _applyTableCellIfNeeded(Node node, Map<String, dynamic> attributes) {
+    final colPos = attributes[_tableColKey] as int?;
+    final rowPos = attributes[_tableRowKey] as int?;
+
+    return Node(
+      type: TableCellBlockKeys.type,
+      attributes: {
+        if (colPos != null) TableCellBlockKeys.colPosition: colPos,
+        if (rowPos != null) TableCellBlockKeys.rowPosition: rowPos,
+      },
+      children: [node], // The original node becomes a child of the table cell
+    );
   }
 
-  bool _isIndentBulletedList(Map<String, dynamic>? attributes) {
-    final list = attributes?[_list] as String?;
-    final indent = attributes?[_indent] as int?;
-    return [_bulletedList, _orderedList].contains(list) && indent != null;
+  Node _createTableNode(Map<String, dynamic> attributes) {
+    final colsLen = attributes['table-cols'] as int? ?? 1;
+    final rowsLen = attributes['table-rows'] as int? ?? 1;
+
+    return Node(
+      type: TableBlockKeys.type,
+      attributes: {
+        TableBlockKeys.colsLen: colsLen,
+        TableBlockKeys.rowsLen: rowsLen,
+        TableBlockKeys.colDefaultWidth: 160.0,
+        TableBlockKeys.rowDefaultHeight: 40.0,
+        TableBlockKeys.colMinimumWidth: 40.0,
+      },
+      children: [], // Children will be added later during reconstruction
+    );
+  }
+
+  void _reconstructTables(
+    Document document,
+    Map<String, Node> tableNodes,
+    Map<String, List<Node>> tableCells,
+  ) {
+    // For each table, add its cells and insert it into the document
+    for (final entry in tableNodes.entries) {
+      final tableId = entry.key;
+      final tableNode = entry.value;
+      final cells = tableCells[tableId] ?? [];
+
+      // Sort cells by position to ensure correct order
+      cells.sort((a, b) {
+        final aRow = a.attributes[TableCellBlockKeys.rowPosition] as int? ?? 0;
+        final aCol = a.attributes[TableCellBlockKeys.colPosition] as int? ?? 0;
+        final bRow = b.attributes[TableCellBlockKeys.rowPosition] as int? ?? 0;
+        final bCol = b.attributes[TableCellBlockKeys.colPosition] as int? ?? 0;
+
+        // Sort by row first, then by column
+        final rowCompare = aRow.compareTo(bRow);
+        return rowCompare != 0 ? rowCompare : aCol.compareTo(bCol);
+      });
+
+      // Add cells to the table
+      for (final cell in cells) {
+        tableNode.insert(cell);
+      }
+
+      // Insert the table into the document at the end
+      final topLevelIndex = document.root.children.length;
+      document.insert([topLevelIndex], [tableNode]);
+    }
   }
 
   bool _containsStyle(Map<String, dynamic>? attributes, String key) {
