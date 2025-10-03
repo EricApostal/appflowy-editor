@@ -20,7 +20,7 @@ void _insertOrConvertToBulletedList(EditorState editorState) {
 
   final transaction = editorState.transaction;
   final delta = currentNode.delta;
-  
+
   // If cursor is at the beginning of a line with content, or on an empty line,
   // convert the current line to a bulleted list
   if (delta != null && (selection.startIndex == 0 || delta.isEmpty)) {
@@ -28,32 +28,36 @@ void _insertOrConvertToBulletedList(EditorState editorState) {
     transaction.updateNode(currentNode, {
       'type': BulletedListBlockKeys.type,
       BulletedListBlockKeys.delta: delta.toJson(),
-      blockComponentTextDirection: currentNode.attributes[blockComponentTextDirection],
+      blockComponentTextDirection:
+          currentNode.attributes[blockComponentTextDirection],
     });
     transaction.afterSelection = selection;
   } else if (delta != null && delta.isNotEmpty) {
     // If cursor is in the middle of text, split the line and create bulleted list
     final beforeDelta = delta.slice(0, selection.startIndex);
     final afterDelta = delta.slice(selection.startIndex);
-    
+
     // Update current node with text before cursor
     transaction.updateNode(currentNode, {
       currentNode.type: currentNode.type,
       ParagraphBlockKeys.delta: beforeDelta.toJson(),
-      blockComponentTextDirection: currentNode.attributes[blockComponentTextDirection],
+      blockComponentTextDirection:
+          currentNode.attributes[blockComponentTextDirection],
     });
-    
+
     // Create new bulleted list node with text after cursor
     final bulletNode = bulletedListNode(delta: afterDelta);
     bulletNode.updateAttributes({
-      blockComponentTextDirection: currentNode.attributes[blockComponentTextDirection],
+      blockComponentTextDirection:
+          currentNode.attributes[blockComponentTextDirection],
     });
-    
+
     final nextPath = selection.end.path.next;
     transaction.insertNode(nextPath, bulletNode);
-    transaction.afterSelection = Selection.collapsed(Position(path: nextPath, offset: 0));
+    transaction.afterSelection =
+        Selection.collapsed(Position(path: nextPath, offset: 0));
   }
-  
+
   editorState.apply(transaction);
 }
 
